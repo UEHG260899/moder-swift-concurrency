@@ -93,6 +93,25 @@ struct ListView: View {
       }, message: {
         Text(lastErrorMessage)
       })
+      .task {
+        guard files.isEmpty else { return }
+        
+        do {
+          /* Kind of like promises in other languages
+           allows to group async work and fires it at the same time
+           */
+          async let files = try model.availableFiles()
+          async let status = try model.status()
+          
+          // It is here where the data is available from the server
+          let (filesResult, statusResult) = try await (files, status)
+          
+          self.files = filesResult
+          self.status = statusResult
+        } catch {
+          lastErrorMessage = error.localizedDescription
+        }
+      }
     }
   }
 }
