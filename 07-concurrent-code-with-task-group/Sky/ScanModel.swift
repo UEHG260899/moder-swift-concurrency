@@ -60,6 +60,54 @@ class ScanModel: ObservableObject {
 
   func runAllTasks() async throws {
     started = Date()
+    
+    try await withThrowingTaskGroup(of: Result<String, Error>.self) { [unowned self] group in
+      //for number in 0..<total {
+      //  group.addTask {
+      //    await self.worker(number: number)
+      //  }
+      //}
+      
+//      return await group
+//        .reduce(into: [String]()) { result, string in
+//          result.append(string)
+//        }
+      
+      let batchSize = 4
+      
+      for index in 0..<batchSize {
+        group.addTask {
+          await self.worker(number: index)
+        }
+      }
+      
+      var index = batchSize
+      
+      for try await result in group {
+        
+        switch result {
+        case .success(let result):
+          print("Completed \(result)")
+        case .failure(let error):
+          print("Failed: \(error.localizedDescription)")
+        }
+        
+        if index < total {
+          group.addTask { [index] in
+            await self.worker(number: index)
+          }
+          index += 1
+        }
+      }
+      
+      await MainActor.run {
+        completed = 0
+        counted = 0
+        scheduled = 0
+      }
+    }
+    
+   
   }
 }
 
@@ -77,5 +125,21 @@ extension ScanModel {
   @MainActor
   private func onScheduled() {
     scheduled += 1
+  }
+
+  func worker(number: Int) async -> Result<String, Error> {
+    await onScheduled()
+    
+    let task = ScanTask(input: number)
+    let result: Result<String, Error>
+    
+    do {
+      result = try .success(await task.run())
+    } catch {
+      result = .failure(error)
+    }
+    
+    await onTaskCompleted()
+    return result
   }
 }
