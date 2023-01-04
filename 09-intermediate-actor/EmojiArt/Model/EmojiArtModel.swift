@@ -51,6 +51,10 @@ actor EmojiArtModel: ObservableObject {
     }
   }
 
+  /*
+   nonisolated se usa cuando una función no modifica el estado del actor
+   y ayuda un poco al manejo interno de la memoria
+   */
   nonisolated func loadImages() async throws {
     await MainActor.run {
       imageFeed.removeAll()
