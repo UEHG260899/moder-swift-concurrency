@@ -1,4 +1,4 @@
-/// Copyright (c) 2021 Razeware LLC
+/// Copyright (c) 2023 Razeware LLC
 /// 
 /// Permission is hereby granted, free of charge, to any person obtaining a copy
 /// of this software and associated documentation files (the "Software"), to deal
@@ -30,27 +30,60 @@
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 /// THE SOFTWARE.
 
-import SwiftUI
+import UIKit
 
-@main
-struct AppMain: App {
-  private var model = EmojiArtModel()
+actor ImageLoader: ObservableObject {
+  enum DownloadState {
+    case inProgress(Task<UIImage, Error>)
+    case completed(UIImage)
+    case failed
+  }
+  
+  private(set) var cache: [String: DownloadState] = [:]
+}
 
-  @State private var isVerified = false
+extension ImageLoader {
+  func add(_ image: UIImage, forKey key: String) {
+    cache[key] = .completed(image)
+  }
 
-  var body: some Scene {
-    WindowGroup {
-      VStack {
-        if isVerified {
-          ListView()
-        } else {
-          LoadingView(isVerified: $isVerified)
-        }
+  func image(_ serverPath: String) async throws -> UIImage {
+    
+    if let cached = cache[serverPath] {
+      switch cached {
+      case .inProgress(let task):
+        return try await task.value
+      case .completed(let uIImage):
+        return uIImage
+      case .failed:
+        throw "Download failed"
       }
-      .transition(.opacity)
-      .animation(.linear, value: isVerified)
-      .environmentObject(model)
-      .environmentObject(ImageLoader())
     }
+  
+    let download: Task<UIImage, Error> = Task.detached {
+      guard let url = URL(string: "http://localhost:8080".appending(serverPath)) else {
+        throw "Could not create the download URL"
+      }
+      
+      print("Download: \(url.absoluteString)")
+      
+      let data = try await URLSession.shared.data(from: url).0
+      return try resize(data, to: CGSize(width: 200, height: 200))
+    }
+    
+    cache[serverPath] = .inProgress(download)
+    
+    do {
+      let result = try await download.value
+      add(result, forKey: serverPath)
+      return result
+    } catch {
+      cache[serverPath] = .failed
+      throw error
+    }
+  }
+
+  func clear() {
+    cache.removeAll()
   }
 }

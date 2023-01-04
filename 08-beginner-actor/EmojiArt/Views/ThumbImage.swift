@@ -33,6 +33,9 @@
 import SwiftUI
 
 struct ThumbImage: View {
+  
+  @EnvironmentObject var imageLoader: ImageLoader
+  
   let file: ImageFile
   @State var image = UIImage()
   @State var overlay = ""
@@ -50,6 +53,14 @@ struct ThumbImage: View {
         if !overlay.isEmpty {
           Image(systemName: overlay)
         }
+      }
+      .task {
+        guard let image = try? await imageLoader.image(file.url) else {
+          overlay = "camera.metering.unknown"
+          return
+        }
+        
+        updateImage(image)
       }
   }
 }
